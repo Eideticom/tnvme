@@ -148,12 +148,31 @@ CtrlrConfig::SetIrqScheme(enum nvme_irq_type newIrq, uint16_t numIrqs)
         return false;
     }
 
+    if (numIrqs == 0) {
+        LOG_ERR("Num desired IRQs cannot be 0");
+        return false;
+    }
+
     string irqDesc;
     if (DecodeIrqScheme(newIrq, irqDesc) == false) {
         LOG_ERR("Unable to decode IRQ scheme");
         return false;
     }
     LOG_NRM("Setting IRQ state: %d IRQ(s) of %s", numIrqs, irqDesc.c_str());
+
+    uint64_t current_mc;
+    if (gRegisters->Read(PCISPC_MC, current_mc) == false) {
+        LOG_ERR("Unable to determine MSICAP MC");
+        return false;
+    }
+
+    uint16_t numMME = 0;
+    for (uint16_t pow2Irq = numIrqs; (pow2Irq & 0x1) == 0; pow2Irq >>= 1, ++numMME);
+    current_mc |= (numMME & 0x7) << 4;
+    if (gRegisters->Write(PCISPC_MC, current_mc) == false) {
+        LOG_ERR("Unable to set MSICAP MC");
+        return false;
+    }
 
     struct interrupts state;
     state.irq_type = newIrq;
